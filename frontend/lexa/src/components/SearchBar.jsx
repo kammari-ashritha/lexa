@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const IconSearch = () => (
   <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +37,7 @@ export default function SearchBar({ onSearch, loading }) {
     clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/search/suggest?q=${encodeURIComponent(input)}`)
+        const res = await axios.get(`${API_BASE}/search/suggest?q=${encodeURIComponent(input)}`)
         setSugs(res.data.suggestions || [])
         setShowSugs(true)
       } catch {}
