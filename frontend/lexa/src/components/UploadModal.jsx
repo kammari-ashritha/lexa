@@ -2,6 +2,7 @@
 import { useState, useRef } from 'react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const CATEGORIES = ['General','Technology','Finance','Healthcare','Legal','Science','Business','Education']
 
@@ -58,7 +59,7 @@ export default function UploadModal({ onClose, onSuccess }) {
     setLoading(true)
     try {
       const tagList = tags.split(',').map(t => t.trim()).filter(Boolean)
-      const res = await axios.post('http://localhost:5000/api/documents/ingest', {
+      const res = await axios.post(`${API_BASE}/documents/ingest`, {
         title: title.trim(), content: content.trim(), category, tags: tagList
       }, { timeout: 120000 })
       toast.success(`✅ "${title}" ingested! ${res.data.chunks_created} chunks created.`)
