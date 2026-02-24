@@ -2,36 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import toast from 'react-hot-toast'
 
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
-const API = `${BASE}/analytics`
-
-const IconSearch = ({ size = 13 }) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:size,height:size}}>
-    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-  </svg>
-)
-const IconTrend = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:13,height:13}}>
-    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-    <polyline points="17 6 23 6 23 12"/>
-  </svg>
-)
-const IconChart = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:13,height:13}}>
-    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
-    <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
-  </svg>
-)
-const IconZap = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:13,height:13}}>
-    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-  </svg>
-)
-const IconClock = () => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{width:13,height:13}}>
-    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-  </svg>
-)
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 export default function Analytics() {
   const [summary, setSummary] = useState(null)
@@ -41,30 +12,29 @@ export default function Analytics() {
 
   useEffect(() => {
     Promise.all([
-      axios.get(`${API}/summary`),
-      axios.get(`${API}/history`),
-      axios.get(`${API}/trend`),
+      axios.get(`${API_BASE}/analytics/summary`).catch(() => ({ data: null })),
+      axios.get(`${API_BASE}/analytics/history`).catch(() => ({ data: { history: [] } })),
+      axios.get(`${API_BASE}/analytics/trend`).catch(()   => ({ data: { trend: [] } })),
     ]).then(([s, h, t]) => {
       setSummary(s.data)
-      setHistory(h.data.history || [])
-      setTrend(t.data.trend || [])
-    }).catch(() => toast.error('Failed to load analytics'))
-    .finally(() => setLoading(false))
+      setHistory(h.data?.history || [])
+      setTrend(t.data?.trend || [])
+    }).finally(() => setLoading(false))
   }, [])
 
   const maxTrend = Math.max(...trend.map(t => t.count), 1)
 
   if (loading) return (
-    <div style={{textAlign:'center',padding:'64px 0',color:'var(--text-muted)'}}>
-      Loading analytics...
-    </div>
+    <main className="lexa-main-wide">
+      <div style={{textAlign:'center',padding:'64px 0',color:'#C4B5FD'}}>Loading analytics...</div>
+    </main>
   )
 
   const statCards = summary ? [
-    { label: 'Total Searches', value: summary.totalSearches,           Icon: IconSearch, color: 'var(--purple-light)' },
-    { label: 'Today',          value: summary.todaySearches,           Icon: IconTrend,  color: 'var(--green)'        },
-    { label: 'Avg Results',    value: summary.avgResultsPerSearch,     Icon: IconChart,  color: 'var(--purple-light)' },
-    { label: 'Avg Latency',    value: `${summary.avgLatencyMs}ms`,     Icon: IconZap,    color: 'var(--green)'        },
+    { label: 'Total Searches', value: summary.totalSearches,       color: '#A855F7' },
+    { label: 'Today',          value: summary.todaySearches,       color: '#00ED64' },
+    { label: 'Avg Results',    value: summary.avgResultsPerSearch, color: '#A855F7' },
+    { label: 'Avg Latency',    value: `${summary.avgLatencyMs}ms`, color: '#00ED64' },
   ] : []
 
   return (
@@ -74,50 +44,35 @@ export default function Analytics() {
         <div className="section-sub">MongoDB aggregation-powered query intelligence</div>
       </div>
 
-      {/* Stat cards */}
-      <div className="analytics-grid">
-        {statCards.map((s, i) => (
-          <div key={i} className="stat-card" style={{animationDelay:`${i*60}ms`}}>
-            <div className="stat-card-header">
-              <span style={{color:s.color}}><s.Icon /></span>
-              <span className="stat-card-label">{s.label}</span>
+      {statCards.length > 0 && (
+        <div className="analytics-grid">
+          {statCards.map((s, i) => (
+            <div key={i} className="stat-card">
+              <div className="stat-card-label" style={{marginBottom:12,color:'#C4B5FD'}}>{s.label}</div>
+              <div className="stat-card-value" style={{color:s.color}}>{s.value}</div>
             </div>
-            <div className="stat-card-value" style={{color:s.color}}>{s.value}</div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* Charts row */}
       <div className="analytics-panels">
-
-        {/* Bar chart */}
         {trend.length > 0 && (
-          <div className="panel" style={{animationDelay:'0.2s'}}>
-            <div className="panel-title">
-              <span style={{color:'var(--green)'}}><IconTrend /></span>
-              Searches — Last 7 Days
-            </div>
+          <div className="panel">
+            <div className="panel-title" style={{color:'#00ED64'}}>Searches — Last 7 Days</div>
             <div className="bar-chart">
               {trend.map((t, i) => (
                 <div key={i} className="bar-col">
-                  <div
-                    className="bar-fill"
-                    style={{ height: `${Math.max(4, (t.count / maxTrend) * 72)}px` }}
-                  />
-                  <span className="bar-label">{t._id.slice(5)}</span>
+                  <div className="bar-fill" style={{ height: `${Math.max(4, (t.count / maxTrend) * 72)}px` }} />
+                  <span className="bar-label">{t._id?.slice(5) || ''}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Top queries */}
         {summary?.topQueries?.length > 0 && (
-          <div className="panel" style={{animationDelay:'0.25s'}}>
-            <div className="panel-title">
-              <span style={{color:'var(--purple-light)'}}><IconSearch size={14} /></span>
-              Top Queries
-            </div>
+          <div className="panel">
+            <div className="panel-title" style={{color:'#A855F7'}}>Top Queries</div>
             <div className="query-list">
               {summary.topQueries.map((q, i) => (
                 <div key={i} className="query-row">
@@ -131,29 +86,28 @@ export default function Analytics() {
         )}
       </div>
 
-      {/* Query history */}
       {history.length > 0 && (
-        <div className="panel history-panel" style={{animationDelay:'0.3s'}}>
-          <div className="panel-title">
-            <span style={{color:'var(--text-muted)'}}><IconClock /></span>
-            Recent Searches
-          </div>
-          <div>
-            {history.map((h, i) => (
-              <div key={i} className="history-row">
-                <div className="history-query">
-                  <IconSearch size={12} />
-                  {h.query}
-                  {h.hadSummary && <span className="history-ai-badge">AI</span>}
-                </div>
-                <div className="history-meta">
-                  <span>{h.resultCount} results</span>
-                  <span>{h.latencyMs}ms</span>
-                  <span>{new Date(h.timestamp).toLocaleTimeString()}</span>
-                </div>
+        <div className="panel" style={{marginTop:16}}>
+          <div className="panel-title" style={{color:'#9CA3AF'}}>Recent Searches</div>
+          {history.map((h, i) => (
+            <div key={i} className="history-row">
+              <div className="history-query">
+                {h.query}
+                {h.hadSummary && <span className="history-ai-badge">AI</span>}
               </div>
-            ))}
-          </div>
+              <div className="history-meta">
+                <span>{h.resultCount} results</span>
+                <span>{h.latencyMs}ms</span>
+                <span>{new Date(h.timestamp).toLocaleTimeString()}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!summary && !loading && (
+        <div style={{textAlign:'center',padding:'40px',color:'#C4B5FD'}}>
+          No analytics yet. Start searching to see data here!
         </div>
       )}
     </main>
