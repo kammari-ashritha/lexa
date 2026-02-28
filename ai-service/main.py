@@ -1,153 +1,93 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from sentence_transformers import SentenceTransformer
-from typing import List, Optional
-import pymongo
-import os
-from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer, CrossEncoder
+import numpy as np
 import uvicorn
 
-load_dotenv()
-
-app = FastAPI(title="Lexa AI Service", version="1.0.0")
+app = FastAPI(title="Lexa AI Service v3")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-print("⏳ Loading sentence-transformer model...")
-model = SentenceTransformer('all-MiniLM-L6-v2')
-print("✅ Model loaded!")
+# Load models at startup
+print("Loading embedding model...")
+embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+print("Embedding model loaded!")
 
-MONGO_URI = os.getenv("MONGO_URI")
-mongo_client = pymongo.MongoClient(MONGO_URI)
-db = mongo_client["lexa_db"]
-documents_col = db["documents"]
+print("Loading cross-encoder model...")
+cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+print("Cross-encoder loaded!")
 
-# ─────────────────────────────────────────────
-# MODELS
-# ─────────────────────────────────────────────
-class EmbedRequest(BaseModel):
-    text: str
-
-class IngestRequest(BaseModel):
-    title: str
-    content: str
-    category: Optional[str] = "General"
-    tags: Optional[List[str]] = []
-
-class BulkIngestRequest(BaseModel):
-    documents: List[IngestRequest]
-
-# ─────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────
-def smart_chunk(text: str, chunk_size: int = 400, overlap: int = 80):
-    """Split text into overlapping chunks for better semantic coverage."""
-    words = text.split()
-    chunks = []
-    start = 0
-    while start < len(words):
-        end = start + chunk_size
-        chunk = " ".join(words[start:end])
-        if chunk.strip():
-            chunks.append(chunk)
-        start += chunk_size - overlap
-    return chunks if chunks else [text]
-
-def generate_embedding(text: str) -> List[float]:
-    return model.encode(text, normalize_embeddings=True).tolist()
-
-# ─────────────────────────────────────────────
-# ROUTES
-# ─────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {
-        "service": "Lexa AI Service",
-        "status": "running",
-        "model": "all-MiniLM-L6-v2",
-        "dimensions": 384
-    }
+    return {"service": "Lexa AI Service v3", "status": "running"}
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "model_loaded": True}
+    return {"status": "ok"}
 
 @app.post("/embed")
-def embed_text(req: EmbedRequest):
-    if not req.text.strip():
-        raise HTTPException(status_code=400, detail="Text cannot be empty")
-    embedding = generate_embedding(req.text)
-    return {
-        "embedding": embedding,
-        "dimensions": len(embedding),
-        "text_preview": req.text[:100]
-    }
+async def embed(request: Request):
+    data = await request.json()
+    text = data.get("text", "")
+    if not text:
+        return {"error": "text required"}
+    embedding = embed_model.encode(text, normalize_embeddings=True).tolist()
+    return {"embedding": embedding, "dimensions": len(embedding)}
 
-@app.post("/ingest")
-def ingest_document(req: IngestRequest):
-    if not req.title.strip() or not req.content.strip():
-        raise HTTPException(status_code=400, detail="Title and content required")
+@app.post("/embed-batch")
+async def embed_batch(request: Request):
+    data = await request.json()
+    texts = data.get("texts", [])
+    if not texts:
+        return {"embeddings": []}
+    embeddings = embed_model.encode(texts, normalize_embeddings=True).tolist()
+    return {"embeddings": embeddings}
 
-    # Remove old chunks for same title (re-ingest)
-    documents_col.delete_many({"title": req.title})
+@app.post("/rerank")
+async def rerank(request: Request):
+    data = await request.json()
+    query = data.get("query", "")
+    docs = data.get("docs", [])
 
-    chunks = smart_chunk(req.content)
-    docs_to_insert = []
+    if not docs or not query:
+        return {"docs": docs}
 
-    for i, chunk in enumerate(chunks):
-        embedding = generate_embedding(chunk)
-        doc = {
-            "title": req.title,
-            "content": chunk,
-            "chunk_index": i,
-            "total_chunks": len(chunks),
-            "category": req.category,
-            "tags": req.tags,
-            "embedding": embedding,
-            "word_count": len(chunk.split()),
-        }
-        docs_to_insert.append(doc)
+    try:
+        # Create query-document pairs for cross-encoder
+        pairs = [[query, doc.get("content", "")[:512]] for doc in docs]
+        scores = cross_encoder.predict(pairs)
 
-    if docs_to_insert:
-        documents_col.insert_many(docs_to_insert)
+        # Convert to Python floats
+        scores = [float(s) for s in scores]
 
-    return {
-        "success": True,
-        "title": req.title,
-        "category": req.category,
-        "chunks_created": len(chunks),
-        "total_vectors": len(docs_to_insert)
-    }
+        # Normalize scores to 0-1 range
+        min_s, max_s = min(scores), max(scores)
+        score_range = max_s - min_s if max_s != min_s else 1.0
+        norm_scores = [(s - min_s) / score_range for s in scores]
 
-@app.post("/ingest/bulk")
-def bulk_ingest(req: BulkIngestRequest):
-    results = []
-    errors = []
-    for doc_req in req.documents:
-        try:
-            result = ingest_document(doc_req)
-            results.append(result)
-        except Exception as e:
-            errors.append({"title": doc_req.title, "error": str(e)})
-    return {
-        "success": True,
-        "ingested": len(results),
-        "errors": len(errors),
-        "results": results,
-        "error_details": errors
-    }
+        # Combine scores: 50% vector + 30% lexical + 20% cross-encoder
+        for i, doc in enumerate(docs):
+            doc["crossScore"] = round(norm_scores[i], 4)
+            doc["finalScore"] = round(
+                0.5 * float(doc.get("vectorScore", 0)) +
+                0.3 * float(doc.get("lexicalScore", 0)) +
+                0.2 * norm_scores[i],
+                4
+            )
 
-@app.delete("/documents/clear")
-def clear_all():
-    result = documents_col.delete_many({})
-    return {"deleted_count": result.deleted_count}
+        # Sort by final score, return top 5
+        docs.sort(key=lambda x: x["finalScore"], reverse=True)
+        print(f"Reranked {len(docs)} docs, top score: {docs[0]['finalScore']:.4f}")
+        return {"docs": docs[:5]}
+
+    except Exception as e:
+        print(f"Rerank error: {e}")
+        return {"docs": docs}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

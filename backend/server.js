@@ -1,46 +1,51 @@
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const { MongoClient } = require('mongodb');
+const express = require('express')
+const cors = require('cors')
+const { MongoClient } = require('mongodb')
+const dotenv = require('dotenv')
+dotenv.config()
 
-dotenv.config();
+const app = express()
 
-const app = express();
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(cors({
+  origin: ['http://localhost:5173','https://lexa-one.vercel.app', process.env.FRONTEND_URL].filter(Boolean),
+  credentials: true
+}))
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
-const mongoClient = new MongoClient(process.env.MONGO_URI, {
-  tls: true,
-  serverSelectionTimeoutMS: 10000,
-});
+const { searchLimiter, uploadLimiter, authLimiter } = require('./middleware/rateLimiter')
 
-async function initDB() {
+const searchRoutes    = require('./routes/search')
+const documentRoutes  = require('./routes/documents')
+const analyticsRoutes = require('./routes/analytics')
+const chatRoutes      = require('./routes/chat')
+const authRoutes      = require('./routes/authRoute')
+
+app.use('/api/auth',      authLimiter,   authRoutes)
+app.use('/api/search',    searchLimiter, searchRoutes)
+app.use('/api/documents', uploadLimiter, documentRoutes)
+app.use('/api/analytics', analyticsRoutes)
+app.use('/api/chat',      chatRoutes)
+
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }))
+app.get('/',       (req, res) => res.json({ service: 'Lexa Backend v3', status: 'running' }))
+
+const PORT = process.env.PORT || 5000
+
+async function start() {
   try {
-    await mongoClient.connect();
-    console.log('✅ MongoDB Atlas Connected');
-    app.locals.mongoClient = mongoClient;
-    app.locals.db = mongoClient.db('lexa_db');
+    const client = await MongoClient.connect(process.env.MONGO_URI)
+    const db = client.db('lexa_db')
+    app.locals.db = db
+    console.log('MongoDB Atlas connected')
+    try {
+      await db.collection('query_cache').createIndex({ expireAt: 1 }, { expireAfterSeconds: 0 })
+    } catch(e) {}
+    app.listen(PORT, () => console.log(`Lexa Backend running on port ${PORT}`))
   } catch (err) {
-    console.error('❌ MongoDB Connection Failed:', err.message);
-    process.exit(1);
+    console.error('MongoDB connection failed:', err)
+    process.exit(1)
   }
 }
 
-app.use('/api/search',    require('./routes/search'));
-app.use('/api/documents', require('./routes/documents'));
-app.use('/api/analytics', require('./routes/analytics'));
-
-app.get('/test-analytics', (req, res) => {
-  res.json({ test: 'analytics route working' });
-});
-
-app.get('/', (req, res) => {
-  res.json({ service: 'Lexa Backend API', version: '2.0.0', status: 'ready' });
-});
-
-initDB().then(() => {
-  const PORT = process.env.PORT || 5000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Lexa Backend running on http://localhost:${PORT}`);
-  });
-});
+start()
