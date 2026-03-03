@@ -4,11 +4,10 @@ const axios   = require('axios')
 const dotenv  = require('dotenv')
 dotenv.config()
 
-const AI_URL     = process.env.AI_SERVICE_URL || 'http://localhost:8000'
-const GEMINI_KEY = process.env.GEMINI_API_KEY
-
-// Use gemini-2.0-flash (confirmed available from ListModels)
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`
+const AI_URL   = process.env.AI_SERVICE_URL || 'http://localhost:8000'
+const GROQ_KEY = process.env.GROQ_API_KEY
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const MODEL    = 'llama-3.1-8b-instant'
 
 function needsDocumentSearch(message) {
   const greetings = ['hi','hello','hey','howdy','hiya','sup','thanks','thank you','bye','goodbye','ok','okay','yes','no','cool','nice','great','awesome']
@@ -46,9 +45,9 @@ router.post('/', async (req, res) => {
 
     if (!message?.trim()) return res.status(400).json({ error: 'Message is required' })
 
-    if (!GEMINI_KEY) {
-      console.error('GEMINI_API_KEY not set!')
-      return res.status(500).json({ error: 'Gemini API key not configured' })
+    if (!GROQ_KEY) {
+      console.error('GROQ_API_KEY not set!')
+      return res.status(500).json({ error: 'Groq API key not configured' })
     }
 
     // Search documents if needed
@@ -73,28 +72,32 @@ ${docContext
   : '\nNo documents found. Answer from general knowledge or suggest uploading relevant documents.'
 }`
 
-    // Build conversation
-    const contents = []
+    // Build messages for Groq (OpenAI format)
+    const messages = [{ role: 'system', content: systemPrompt }]
     history.slice(-10).forEach(msg => {
-      contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] })
+      messages.push({ role: msg.role === 'assistant' ? 'assistant' : 'user', content: msg.content })
     })
-    contents.push({ role: 'user', parts: [{ text: message }] })
+    messages.push({ role: 'user', content: message })
 
-    // Call Gemini 2.0 Flash
-    const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-      {
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents,
-        generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 1024 }
+    // Call Groq
+    const groqRes = await axios.post(GROQ_URL, {
+      model: MODEL,
+      messages,
+      temperature: 0.7,
+      max_tokens:  1024
+    }, {
+      headers: {
+        'Authorization': `Bearer ${GROQ_KEY}`,
+        'Content-Type':  'application/json'
       },
-      { timeout: 30000 }
-    )
+      timeout: 30000
+    })
 
-    const aiText = geminiRes.data?.candidates?.[0]?.content?.parts?.[0]?.text
-    if (!aiText) throw new Error('No response from Gemini')
+    const aiText = groqRes.data?.choices?.[0]?.message?.content
+    if (!aiText) throw new Error('No response from Groq')
 
     const latencyMs = Date.now() - startTime
+    console.log(`Chat OK: ${latencyMs}ms | model: ${MODEL}`)
 
     try {
       await db.collection('chat_history').insertOne({
