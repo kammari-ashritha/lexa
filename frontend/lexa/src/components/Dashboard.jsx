@@ -10,9 +10,18 @@ import Analytics from './Analytics'
 import DemoPanel from './DemoPanel'
 import ChatTab from './ChatTab'
 
+function useTheme() {
+  const [isLight, setIsLight] = useState(() => document.body.classList.contains('light-mode'))
+  useEffect(() => {
+    const obs = new MutationObserver(() => setIsLight(document.body.classList.contains('light-mode')))
+    obs.observe(document.body, { attributes: true, attributeFilter: ['class'] })
+    return () => obs.disconnect()
+  }, [])
+  return isLight
+}
+
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
-// ── Icon components (no emojis) ─────────────────────────────────
 const DocIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -26,7 +35,28 @@ const SearchIcon = () => (
   </svg>
 )
 
+const MoonIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+  </svg>
+)
+
+const SunIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="5"/>
+    <line x1="12" y1="1" x2="12" y2="3"/>
+    <line x1="12" y1="21" x2="12" y2="23"/>
+    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+    <line x1="1" y1="12" x2="3" y2="12"/>
+    <line x1="21" y1="12" x2="23" y2="12"/>
+    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+  </svg>
+)
+
 export default function Dashboard({ tab = 'search' }) {
+  const isLight = useTheme()
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [results, setResults]       = useState([])
@@ -39,10 +69,32 @@ export default function Dashboard({ tab = 'search' }) {
   const [searched, setSearched]     = useState(false)
   const [showDemo, setShowDemo]     = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
+  const [isDark, setIsDark]         = useState(true)
 
   // Sync tab from route prop
   useEffect(() => { setActiveTab(tab) }, [tab])
   useEffect(() => { fetchStats() }, [])
+
+  // Persist theme across sessions
+  useEffect(() => {
+    const saved = localStorage.getItem('lexa-theme')
+    if (saved === 'light') {
+      setIsDark(false)
+      document.body.classList.add('light-mode')
+    }
+  }, [])
+
+  const toggleTheme = () => {
+    const next = !isDark
+    setIsDark(next)
+    if (next) {
+      document.body.classList.remove('light-mode')
+      localStorage.setItem('lexa-theme', 'dark')
+    } else {
+      document.body.classList.add('light-mode')
+      localStorage.setItem('lexa-theme', 'light')
+    }
+  }
 
   const fetchStats = async () => {
     try {
@@ -72,13 +124,16 @@ export default function Dashboard({ tab = 'search' }) {
     borderRadius: 8,
     fontWeight: activeTab === id ? 700 : 500,
     fontSize: 14,
-    color: activeTab === id ? '#ffffff' : 'rgba(255,255,255,0.5)',
-    background: activeTab === id ? 'rgba(124,58,237,0.25)' : 'transparent',
+    color: activeTab === id ? '#FFFFFF' : (isLight ? '#3D3658' : 'var(--text-faint)'),
+    background: activeTab === id
+      ? 'linear-gradient(135deg,#7C3AED,#6D28D9)'
+      : (isLight ? 'transparent' : 'transparent'),
     border: 'none',
     cursor: 'pointer',
     transition: 'all 0.2s',
     textDecoration: 'none',
-    display: 'inline-block'
+    display: 'inline-block',
+    boxShadow: activeTab === id ? '0 2px 10px rgba(109,40,217,0.35)' : 'none',
   })
 
   const tabs = [
@@ -90,14 +145,15 @@ export default function Dashboard({ tab = 'search' }) {
 
   return (
     <>
-      {/* ── HEADER ─────────────────────────────────────────── */}
+      {/* HEADER */}
       <header className="lexa-header">
         <div className="lexa-logo">
-<img
-  src="/lexa-logo.png"
-  alt="LEXA"
-  style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }}
-/>          <div>
+          <img
+            src="/lexa-logo.png"
+            alt="LEXA"
+            style={{ width: 40, height: 40, borderRadius: 8, objectFit: 'cover' }}
+          />
+          <div>
             <div className="logo-name">LEXA</div>
             <div className="logo-tagline">Semantic Intelligence Engine</div>
           </div>
@@ -116,7 +172,16 @@ export default function Dashboard({ tab = 'search' }) {
           ))}
         </nav>
 
-        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="header-actions">
+          {/* Theme toggle */}
+          <button
+            className="theme-toggle"
+            onClick={toggleTheme}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <SunIcon /> : <MoonIcon />}
+          </button>
+
           {/* Upload button */}
           <button className="btn-upload" onClick={() => setShowUpload(true)}>
             Upload Doc
@@ -150,15 +215,15 @@ export default function Dashboard({ tab = 'search' }) {
             {showUserMenu && (
               <div style={{
                 position: 'absolute', right: 0, top: '110%',
-                background: '#1A003A',
+                background: 'var(--bg-dropdown)',
                 border: '1px solid rgba(124,58,237,0.3)',
                 borderRadius: 12, padding: '8px',
                 minWidth: 200, zIndex: 100,
-                boxShadow: '0 16px 48px rgba(0,0,0,0.5)'
+                boxShadow: '0 16px 48px rgba(0,0,0,0.3)'
               }}>
-                <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 6 }}>
-                  <div style={{ color: '#FFFFFF', fontWeight: 600, fontSize: 13 }}>{user?.name}</div>
-                  <div style={{ color: '#7C6FA0', fontSize: 11, marginTop: 2 }}>{user?.email}</div>
+                <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-subtle)', marginBottom: 6 }}>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 13 }}>{user?.name}</div>
+                  <div style={{ color: 'var(--text-hint)', fontSize: 11, marginTop: 2 }}>{user?.email}</div>
                   {user?.role === 'admin' && (
                     <span style={{
                       background: 'rgba(0,237,100,0.15)', color: '#00ED64',
@@ -185,7 +250,7 @@ export default function Dashboard({ tab = 'search' }) {
         </div>
       </header>
 
-      {/* ── SEARCH TAB ─────────────────────────────────────── */}
+      {/* SEARCH TAB */}
       {activeTab === 'search' && (
         <main className="lexa-main">
           {!searched && (
@@ -220,12 +285,14 @@ export default function Dashboard({ tab = 'search' }) {
                 style={{
                   marginTop: 24,
                   background: showDemo
-                    ? 'linear-gradient(135deg,#7C3AED,#A855F7)'
-                    : 'rgba(124,58,237,0.15)',
-                  border: '1px solid rgba(124,58,237,0.4)',
+                    ? 'linear-gradient(135deg,#7C3AED,#6D28D9)'
+                    : (isLight ? '#EDE9FF' : 'rgba(124,58,237,0.15)'),
+                  border: isLight ? '1px solid #C4BBDF' : '1px solid rgba(124,58,237,0.4)',
                   borderRadius: 12, padding: '10px 24px',
-                  color: '#FFFFFF', fontWeight: 600, fontSize: 14,
-                  cursor: 'pointer', transition: 'all 0.2s'
+                  color: showDemo ? '#FFFFFF' : (isLight ? '#4C1D95' : '#C4B5FD'),
+                  fontWeight: 600, fontSize: 14,
+                  cursor: 'pointer', transition: 'all 0.2s',
+                  boxShadow: showDemo ? '0 4px 14px rgba(109,40,217,0.35)' : 'none',
                 }}
               >
                 {showDemo ? 'Hide Demo' : 'See Live Demo: Semantic vs Keyword'}
@@ -241,7 +308,6 @@ export default function Dashboard({ tab = 'search' }) {
 
           <SearchBar onSearch={handleSearch} loading={loading} />
 
-          {/* Loading indicator — no emoji */}
           {loading && (
             <div className="loading-center">
               <div className="loading-ring-wrap">
@@ -271,16 +337,15 @@ export default function Dashboard({ tab = 'search' }) {
             </div>
           )}
 
-          {/* AI Summary — no emojis, no hyphens in labels */}
           {summary && !loading && (
             <div className="ai-summary">
               <div className="ai-icon-wrap">L</div>
               <div style={{ flex: 1 }}>
-                <div className="ai-label">AI Executive Summary · Powered by Gemini</div>
+                <div className="ai-label">AI Executive Summary · Powered by Groq LLaMA</div>
                 {typeof summary === 'object' ? (
                   <div>
                     {summary.intelligence && (
-                      <div style={{ color: '#FFFFFF', fontSize: 15, fontWeight: 600, marginBottom: 14, lineHeight: 1.6 }}>
+                      <div style={{ color: 'var(--text-primary)', fontSize: 15, fontWeight: 600, marginBottom: 14, lineHeight: 1.6 }}>
                         {summary.intelligence}
                       </div>
                     )}
@@ -289,7 +354,7 @@ export default function Dashboard({ tab = 'search' }) {
                         <div style={{ background: 'rgba(0,237,100,0.06)', border: '1px solid rgba(0,237,100,0.15)', borderRadius: 10, padding: '10px 14px' }}>
                           <div style={{ color: '#00ED64', fontSize: 11, fontWeight: 700, marginBottom: 8 }}>KEY INSIGHTS</div>
                           {summary.keyInsights.map((ins, i) => (
-                            <div key={i} style={{ color: '#E2D9F3', fontSize: 12, marginBottom: 4, display: 'flex', gap: 6 }}>
+                            <div key={i} style={{ color: 'var(--text-soft)', fontSize: 12, marginBottom: 4, display: 'flex', gap: 6 }}>
                               <span style={{ color: '#00ED64' }}>+</span> {ins}
                             </div>
                           ))}
@@ -299,7 +364,7 @@ export default function Dashboard({ tab = 'search' }) {
                         <div style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 10, padding: '10px 14px' }}>
                           <div style={{ color: '#EF4444', fontSize: 11, fontWeight: 700, marginBottom: 8 }}>RISKS</div>
                           {summary.risks.map((r, i) => (
-                            <div key={i} style={{ color: '#E2D9F3', fontSize: 12, marginBottom: 4, display: 'flex', gap: 6 }}>
+                            <div key={i} style={{ color: 'var(--text-soft)', fontSize: 12, marginBottom: 4, display: 'flex', gap: 6 }}>
                               <span style={{ color: '#EF4444' }}>!</span> {r}
                             </div>
                           ))}
@@ -309,7 +374,7 @@ export default function Dashboard({ tab = 'search' }) {
                         <div style={{ background: 'rgba(168,85,247,0.06)', border: '1px solid rgba(168,85,247,0.15)', borderRadius: 10, padding: '10px 14px' }}>
                           <div style={{ color: '#A855F7', fontSize: 11, fontWeight: 700, marginBottom: 8 }}>TRENDS</div>
                           {summary.trends.map((t, i) => (
-                            <div key={i} style={{ color: '#E2D9F3', fontSize: 12, marginBottom: 4, display: 'flex', gap: 6 }}>
+                            <div key={i} style={{ color: 'var(--text-soft)', fontSize: 12, marginBottom: 4, display: 'flex', gap: 6 }}>
                               <span style={{ color: '#A855F7' }}>~</span> {t}
                             </div>
                           ))}
@@ -367,7 +432,6 @@ export default function Dashboard({ tab = 'search' }) {
   )
 }
 
-// ── Documents Tab ───────────────────────────────────────────────
 function DocumentsTab({ stats, onRefresh }) {
   const [documents, setDocuments] = useState([])
   const [loading, setLoading]     = useState(true)
@@ -402,7 +466,7 @@ function DocumentsTab({ stats, onRefresh }) {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '64px 0', color: '#C4B5FD' }}>Loading...</div>
+        <div style={{ textAlign: 'center', padding: '64px 0', color: 'var(--text-dim)' }}>Loading...</div>
       ) : documents.length === 0 ? (
         <div className="empty-state">
           <div style={{
