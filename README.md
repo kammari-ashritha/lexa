@@ -25,7 +25,7 @@ Frontend (React + Vite)  ->  Backend (Node.js + Express)  ->  AI Service (Python
                               Vector Search + Atlas Search (BM25)
 ```
 
-The frontend handles search UI, document upload, analytics, and conversational chat. Built with React 18, Vite, and Tailwind CSS. Deployed on Vercel with React Router v6.
+The frontend handles search UI, document upload, analytics and conversational chat. Built with React 18, Vite, and Tailwind CSS. Deployed on Vercel with React Router v6.
 
 The backend orchestrates search logic, authentication, and document management. Built with Node.js and Express. Deployed on Render.
 
