@@ -3,7 +3,7 @@
 # LEXA
 ### Enterprise Semantic Document Intelligence Engine
 
-**🏆 1st Place — SmartBridge Hack N Go with MongoDB 2026**
+**🏆 1st Place - SmartBridge Hack N Go with MongoDB 2026**
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-lexa--one.vercel.app-7C3AED?style=for-the-badge&logo=vercel)](https://lexa-one.vercel.app)
 [![Backend](https://img.shields.io/badge/Backend-Render-00B4A0?style=for-the-badge&logo=render)](https://lexa-backend-v0rv.onrender.com/health)
@@ -20,9 +20,9 @@
 
 Every organization stores thousands of documents. But when employees search for information, they get nothing — not because the document doesn't exist, but because traditional keyword search only matches characters, not meaning.
 
-A doctor searches **"heart attack"** — the clinical document says **"myocardial infarction"**. Zero results.  
-An employee searches **"work from home rules"** — the HR policy says **"remote work guidelines"**. Zero results.  
-A finance analyst searches **"economic crash"** — the report says **"market downturn"**. Zero results.
+A doctor searches **"heart attack"** - the clinical document says **"myocardial infarction"**. Zero results.  
+An employee searches **"work from home rules"** - the HR policy says **"remote work guidelines"**. Zero results.  
+A finance analyst searches **"economic crash"** - the report says **"market downturn"**. Zero results.
 
 This is the **vocabulary gap**. Lexa closes it permanently.
 
@@ -86,7 +86,7 @@ Lexa is a semantic document intelligence platform that understands the **meaning
 | Backend API | Node.js 22 + Express, JWT, Google OAuth 2.0 |
 | AI Microservice | Python FastAPI, Uvicorn |
 | Vector Database | MongoDB Atlas Vector Search (MongoDB 8.0) |
-| Embedding Model | Voyage AI `voyage-3-lite` — 512 dimensions |
+| Embedding Model | Voyage AI `voyage-3-lite` - 512 dimensions |
 | Reranking | Voyage AI Rerank-2 (cross-encoder) |
 | LLM | Groq LLaMA 3.1 8B Instant (JSON mode) |
 | Deployment | Vercel (frontend) + Render (backend + AI service) |
@@ -112,7 +112,7 @@ Query Text
     │
     ▼
 [Stage 3] Reciprocal Rank Fusion (k=60)
-    │   Merges both result sets — documents in both lists rank higher
+    │   Merges both result sets - documents in both lists rank higher
     │
     ▼
 [Stage 4] Voyage AI Rerank-2
@@ -132,9 +132,9 @@ Results + AI Summary
 
 ---
 
-## MongoDB Atlas — Deep Usage
+## MongoDB Atlas - Deep Usage
 
-This project uses MongoDB Atlas as its **entire infrastructure layer** — not just as a database.
+This project uses MongoDB Atlas as its **entire infrastructure layer** - not just as a database.
 
 ### Vector Index with Scalar Quantization
 ```json
@@ -153,9 +153,9 @@ This project uses MongoDB Atlas as its **entire infrastructure layer** — not j
   ]
 }
 ```
-Scalar quantization compresses each embedding from **2048 bytes → 512 bytes** (4x reduction, <1% accuracy loss). Filter fields declared inside the index ensure multi-tenant isolation happens at the **ANN graph traversal level** — not as a post-filter.
+Scalar quantization compresses each embedding from **2048 bytes → 512 bytes** (4x reduction, <1% accuracy loss). Filter fields declared inside the index ensure multi-tenant isolation happens at the **ANN graph traversal level** - not as a post-filter.
 
-### $facet Analytics — 5 Dimensions, 1 Query
+### $facet Analytics - 5 Dimensions, 1 Query
 ```javascript
 db.collection('queries').aggregate([{
   $facet: {
@@ -169,7 +169,7 @@ db.collection('queries').aggregate([{
 ```
 One round-trip. Five analytical results. No separate analytics database.
 
-### Related Documents — Zero Re-embedding Cost
+### Related Documents - Zero Re-embedding Cost
 ```javascript
 // Uses the document's already-stored embedding as the query vector
 const sourceDoc = await col.findOne({ title }, { projection: { embedding: 1 } })
@@ -178,7 +178,7 @@ col.aggregate([{
   $vectorSearch: {
     index: 'vector_index',
     path: 'embedding',
-    queryVector: sourceDoc.embedding,  // reuse stored vector
+    queryVector: sourceDoc.embedding, 
     numCandidates: 50,
     limit: 5
   }
@@ -274,8 +274,8 @@ Create this index on your `documents` collection in Atlas:
 
 ## Built By
 
-**Team Leagix** — KL University  
-SmartBridge Hack N Go with MongoDB 2026 — **1st Place Winners**
+**Team Leagix** - KL University  
+SmartBridge Hack N Go with MongoDB 2026 - **1st Place Winners**
 
 ---
 
